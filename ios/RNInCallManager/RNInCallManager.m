@@ -7,7 +7,8 @@
 //
 
 #import "RNInCallManager.h"
-
+#import "RTCAudioSession.h"
+#import "RTCAudioSessionConfiguration.h"
 #import <React/RCTBridge.h>
 #import <React/RCTConvert.h>
 #import <React/RCTEventDispatcher.h>
@@ -59,6 +60,9 @@
     NSString *_recordPermission;
     NSString *_cameraPermission;
     NSString *_media;
+    
+    NSString *_origRTCAudioCategory;
+    AVAudioSessionCategoryOptions _origRTCAudioCategoryOption;
 }
 
 + (BOOL)requiresMainQueueSetup
@@ -324,14 +328,18 @@ RCT_EXPORT_METHOD(startRingback:(NSString *)_ringbackUriType)
         _ringback.delegate = self;
         _ringback.numberOfLoops = -1; // you need to stop it explicitly
         [_ringback prepareToPlay];
+        
+        [self storeRTCOriginalAudioSetup];
 
-        //self.audioSessionSetCategory(self.incallAudioCategory, [.DefaultToSpeaker, .AllowBluetooth], #function)
-        [self audioSessionSetCategory:_incallAudioCategory
-                              options:0
-                           callerMemo:NSStringFromSelector(_cmd)];
-        [self audioSessionSetMode:_incallAudioMode
-                       callerMemo:NSStringFromSelector(_cmd)];
-        [_ringback play];
+        // AVAudioPlayer's volume property sets the volume relative to the system
+        // output level. It defaults to 1.0 (player volume == system volume)
+        _ringback.volume = 1.0;
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1 * NSEC_PER_SEC),
+                           dispatch_get_main_queue(), ^{
+                             [self enableRTCLoudspeaker];
+                             [self->_ringback play];
+        });
+
     } @catch (NSException *e) {
         NSLog(@"RNInCallManager.startRingback(): caught error=%@", e.reason);
     }
@@ -343,6 +351,7 @@ RCT_EXPORT_METHOD(stopRingback)
         NSLog(@"RNInCallManager.stopRingback()");
         [_ringback stop];
         _ringback = nil;
+        [self restoreRTCOriginalAudioSetup];
         // --- need to reset route based on config because WebRTC seems will switch audio mode automatically when call established.
         //[self updateAudioRoute];
     }
@@ -750,6 +759,41 @@ RCT_EXPORT_METHOD(getIsWiredHeadsetPluggedIn:(RCTPromiseResolveBlock)resolve
                        callerMemo:NSStringFromSelector(_cmd)];
     [self audioSessionSetMode:_origAudioMode
                    callerMemo:NSStringFromSelector(_cmd)];
+}
+
+- (void)enableRTCLoudspeaker {
+  RTCAudioSession *rtcAudioSession = [RTCAudioSession sharedInstance];
+  NSError *error;
+  [rtcAudioSession lockForConfiguration];
+  if (![rtcAudioSession setCategory:AVAudioSessionCategorySoloAmbient
+                        withOptions:AVAudioSessionCategoryOptionDefaultToSpeaker
+                              error:&error]) {
+    NSLog(@"RNInCallManager. rtcAudioSession Error: %@",
+          [error localizedDescription]);
+  }
+  [rtcAudioSession unlockForConfiguration];
+}
+
+- (void)storeRTCOriginalAudioSetup {
+    RTCAudioSession *rtcAudioSession = [RTCAudioSession sharedInstance];
+    [rtcAudioSession lockForConfiguration];
+    _origRTCAudioCategory = rtcAudioSession.category;
+    _origRTCAudioCategoryOption = rtcAudioSession.categoryOptions;
+    [rtcAudioSession unlockForConfiguration];
+}
+
+- (void)restoreRTCOriginalAudioSetup {
+    
+    RTCAudioSession *rtcAudioSession = [RTCAudioSession sharedInstance];
+    NSError *error;
+    [rtcAudioSession lockForConfiguration];
+    if (![rtcAudioSession setCategory:self->_origRTCAudioCategory
+                              withOptions:self->_origRTCAudioCategoryOption
+                                    error:&error]) {
+    NSLog(@"RNInCallManager. rtcAudioSession Error: %@",
+                [error localizedDescription]);
+        }
+    [rtcAudioSession unlockForConfiguration];
 }
 
 - (void)startProximitySensor
