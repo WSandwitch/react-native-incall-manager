@@ -765,8 +765,8 @@ RCT_EXPORT_METHOD(getIsWiredHeadsetPluggedIn:(RCTPromiseResolveBlock)resolve
   RTCAudioSession *rtcAudioSession = [RTCAudioSession sharedInstance];
   NSError *error;
   [rtcAudioSession lockForConfiguration];
-  if (![rtcAudioSession setCategory:AVAudioSessionCategorySoloAmbient
-                        withOptions:AVAudioSessionCategoryOptionDefaultToSpeaker
+  if (![rtcAudioSession setCategory:AVAudioSessionCategoryPlayback
+                        withOptions:0
                               error:&error]) {
     NSLog(@"RNInCallManager. rtcAudioSession Error: %@",
           [error localizedDescription]);
