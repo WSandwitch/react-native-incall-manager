@@ -1559,7 +1559,7 @@ public class InCallManagerModule extends ReactContextBaseJavaModule implements L
         }
     }
 // ===== Internal Classes End =====
-
+/*
     //  ===== Permission Start =====
     @ReactMethod
     public void checkRecordPermission(Promise promise) {
@@ -1632,7 +1632,7 @@ public class InCallManagerModule extends ReactContextBaseJavaModule implements L
             promise.resolve(cameraPermission);
         }
     }
-
+*/
     @ReactMethod
     public void chooseAudioRoute(String audioRoute, Promise promise) {
         Log.d(TAG, "RNInCallManager.chooseAudioRoute(): user choose audioDevice = " + audioRoute);
