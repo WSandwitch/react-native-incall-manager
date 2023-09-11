@@ -1,10 +1,10 @@
 /*
  * Copyright (c) 2017 Henry Lin @zxcpoiu
- * 
+ *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
  * copyright notice and this permission notice appear in all copies.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
  * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
@@ -29,6 +29,7 @@ import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.media.ToneGenerator;
 import android.net.Uri;
+import android.os.Build.VERSION_CODES;
 import android.os.PowerManager;
 import android.os.Build;
 import android.os.Handler;
@@ -57,6 +58,7 @@ import com.facebook.react.modules.core.DeviceEventManagerModule;
 import java.lang.Runnable;
 import java.io.File;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -83,7 +85,7 @@ public class InCallManagerModule extends ReactContextBaseJavaModule implements L
     private boolean isOrigAudioSetupStored = false;
     private boolean origIsSpeakerPhoneOn = false;
     private boolean origIsMicrophoneMute = false;
-    private int origAudioMode = AudioManager.MODE_INVALID;
+    private int origAudioMode = AudioManager.MODE_IN_CALL;
     private boolean defaultSpeakerOn = false;
     private int defaultAudioMode = AudioManager.MODE_IN_COMMUNICATION;
     private int forceSpeakerOn = 0;
@@ -542,8 +544,8 @@ public class InCallManagerModule extends ReactContextBaseJavaModule implements L
             ReactContext reactContext = getReactApplicationContext();
             if (reactContext != null && reactContext.hasActiveCatalystInstance()) {
                 reactContext
-                        .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
-                        .emit(eventName, params);
+                 .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
+                 .emit(eventName, params);
             } else {
                 Log.e(TAG, "sendEvent(): reactContext is null or not having CatalystInstance yet.");
             }
@@ -875,10 +877,42 @@ public class InCallManagerModule extends ReactContextBaseJavaModule implements L
 
     @ReactMethod
     public void setSpeakerphoneOn(final boolean enable) {
-        if (enable != audioManager.isSpeakerphoneOn())  {
-            Log.d(TAG, "setSpeakerphoneOn(): " + enable);
-	    audioManager.setMode(defaultAudioMode);
-            audioManager.setSpeakerphoneOn(enable);
+        Log.d(TAG, "setSpeakerphoneOn::"+ enable);
+        if (android.os.Build.VERSION.SDK_INT >= 31){
+            Log.d(TAG, "setSpeakerphoneOn:: >= 31 ");
+            // Get an AudioManager instance
+            AudioDeviceInfo speakerDevice = null;
+            List<AudioDeviceInfo> devices = audioManager.getAvailableCommunicationDevices();
+
+            for (AudioDeviceInfo device : devices) {
+                if (device.getType() == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) {
+                    speakerDevice = device;
+                    break;
+                }
+            }
+            audioManager.setMode(AudioManager.MODE_NORMAL);
+            if (speakerDevice != null) {
+                Log.d(TAG, "setSpeakerphoneOn::speakerDevice::"+ speakerDevice.getAudioProfiles());
+                // Turn speakerphone ON.
+                if(enable == true){
+                    Log.d(TAG, "setSpeakerphoneOn::speakerDevice::enable::"+ enable);
+                    boolean result = audioManager.setCommunicationDevice(speakerDevice);
+                    Log.d(TAG, "setSpeakerphoneOn::setCommunicationDevice::result::"+ result);
+                    if (!result) {
+                        Log.d(TAG, "setSpeakerphoneOn::Turn speakerphone ON: error ");
+                    }
+                }else {
+                    // Turn speakerphone OFF.
+                    audioManager.clearCommunicationDevice();
+                }
+            }
+        }else {
+            if (enable != audioManager.isSpeakerphoneOn())  {
+                Log.d(TAG, "setSpeakerphoneOn(): " + enable);
+                Log.d(TAG, "setSpeakerphoneOn(): " + defaultAudioMode);
+                audioManager.setMode(defaultAudioMode);
+                audioManager.setSpeakerphoneOn(enable);
+            }
         }
     }
 
@@ -918,8 +952,8 @@ public class InCallManagerModule extends ReactContextBaseJavaModule implements L
         }
     }
 
-    /** 
-     * This is part of start() process. 
+    /**
+     * This is part of start() process.
      * ringbackUriType must not empty. empty means do not play.
      */
     @ReactMethod
@@ -983,11 +1017,11 @@ public class InCallManagerModule extends ReactContextBaseJavaModule implements L
             }
         } catch(Exception e) {
             Log.d(TAG, "stopRingback() failed");
-        }   
+        }
     }
 
-    /** 
-     * This is part of start() process. 
+    /**
+     * This is part of start() process.
      * busytoneUriType must not empty. empty means do not play.
      * return false to indicate play tone failed and should be stop() immediately
      * otherwise, it will stop() after a tone completed.
@@ -1039,7 +1073,7 @@ public class InCallManagerModule extends ReactContextBaseJavaModule implements L
         } catch(Exception e) {
             Log.d(TAG, "startBusytone() failed", e);
             return false;
-        }   
+        }
     }
 
     public void stopBusytone() {
@@ -1050,7 +1084,7 @@ public class InCallManagerModule extends ReactContextBaseJavaModule implements L
             }
         } catch(Exception e) {
             Log.d(TAG, "stopBusytone() failed");
-        }   
+        }
     }
 
     @ReactMethod
@@ -1165,7 +1199,7 @@ public class InCallManagerModule extends ReactContextBaseJavaModule implements L
             public boolean onError(MediaPlayer mp, int what, int extra) {
                 Log.d(TAG, String.format("MediaPlayer %s onError(). what: %d, extra: %d", name, what, extra));
                 //return True if the method handled the error
-                //return False, or not having an OnErrorListener at all, will cause the OnCompletionListener to be called. Get news & tips 
+                //return False, or not having an OnErrorListener at all, will cause the OnCompletionListener to be called. Get news & tips
                 return true;
             }
         });
@@ -1191,7 +1225,7 @@ public class InCallManagerModule extends ReactContextBaseJavaModule implements L
                     audioManager.setMode(AudioManager.MODE_IN_COMMUNICATION);
                 } else if (name.equals("mRingtone")) {
                     audioManager.setMode(AudioManager.MODE_RINGTONE);
-                } 
+                }
                 updateAudioRoute();
                 mp.start();
             }
@@ -1211,7 +1245,7 @@ public class InCallManagerModule extends ReactContextBaseJavaModule implements L
     }
 
 
-// ===== File Uri Start =====
+    // ===== File Uri Start =====
     @ReactMethod
     public void getAudioUriJS(String audioType, String fileType, Promise promise) {
         Uri result = null;
@@ -1273,7 +1307,7 @@ public class InCallManagerModule extends ReactContextBaseJavaModule implements L
         String type;
         // --- _type would never be empty here. just in case.
         if (_type.equals("_DEFAULT_") ||  _type.isEmpty()) {
-            //type = fileSysWithExt; // --- 
+            //type = fileSysWithExt; // ---
             return getDefaultUserUri("defaultBusytoneUri");
         } else {
             type = _type;
@@ -1346,7 +1380,7 @@ public class InCallManagerModule extends ReactContextBaseJavaModule implements L
 // ===== File Uri End =====
 
 
-// ===== Internal Classes Start =====
+    // ===== Internal Classes Start =====
     private class myToneGenerator extends Thread implements MyPlayerInterface {
         private int toneType;
         private int toneCategory;
@@ -1463,7 +1497,7 @@ public class InCallManagerModule extends ReactContextBaseJavaModule implements L
                             audioManager.setMode(AudioManager.MODE_IN_COMMUNICATION);
                         } else if (caller.equals("mRingtone")) {
                             audioManager.setMode(AudioManager.MODE_RINGTONE);
-                        } 
+                        }
                         InCallManagerModule.this.updateAudioRoute();
 
                         tg.startTone(toneType);
@@ -1525,6 +1559,79 @@ public class InCallManagerModule extends ReactContextBaseJavaModule implements L
         }
     }
 // ===== Internal Classes End =====
+
+    //  ===== Permission Start =====
+    @ReactMethod
+    public void checkRecordPermission(Promise promise) {
+        Log.d(TAG, "RNInCallManager.checkRecordPermission(): enter");
+        _checkRecordPermission();
+        if (recordPermission.equals("unknow")) {
+            Log.d(TAG, "RNInCallManager.checkRecordPermission(): failed");
+            promise.reject(new Exception("checkRecordPermission failed"));
+        } else {
+            promise.resolve(recordPermission);
+        }
+    }
+
+    @ReactMethod
+    public void checkCameraPermission(Promise promise) {
+        Log.d(TAG, "RNInCallManager.checkCameraPermission(): enter");
+        _checkCameraPermission();
+        if (cameraPermission.equals("unknow")) {
+            Log.d(TAG, "RNInCallManager.checkCameraPermission(): failed");
+            promise.reject(new Exception("checkCameraPermission failed"));
+        } else {
+            promise.resolve(cameraPermission);
+        }
+    }
+
+    private void _checkRecordPermission() {
+        recordPermission = _checkPermission(permission.RECORD_AUDIO);
+        Log.d(TAG, String.format("RNInCallManager.checkRecordPermission(): recordPermission=%s", recordPermission));
+    }
+
+    private void _checkCameraPermission() {
+        cameraPermission = _checkPermission(permission.CAMERA);
+        Log.d(TAG, String.format("RNInCallManager.checkCameraPermission(): cameraPermission=%s", cameraPermission));
+    }
+
+    private String _checkPermission(String targetPermission) {
+        try {
+            ReactContext reactContext = getReactApplicationContext();
+            if (ContextCompat.checkSelfPermission(reactContext, targetPermission) == PackageManager.PERMISSION_GRANTED) {
+                return "granted";
+            } else {
+                return "denied";
+            }
+        } catch (Exception e) {
+            Log.d(TAG, "_checkPermission() catch");
+            return "denied";
+        }
+    }
+
+    @ReactMethod
+    public void requestRecordPermission(Promise promise) {
+        Log.d(TAG, "RNInCallManager.requestRecordPermission(): enter");
+        _checkRecordPermission();
+        if (!recordPermission.equals("granted")) {
+            _requestPermission(permission.RECORD_AUDIO, promise);
+        } else {
+            // --- already granted
+            promise.resolve(recordPermission);
+        }
+    }
+
+    @ReactMethod
+    public void requestCameraPermission(Promise promise) {
+        Log.d(TAG, "RNInCallManager.requestCameraPermission(): enter");
+        _checkCameraPermission();
+        if (!cameraPermission.equals("granted")) {
+            _requestPermission(permission.CAMERA, promise);
+        } else {
+            // --- already granted
+            promise.resolve(cameraPermission);
+        }
+    }
 
     @ReactMethod
     public void chooseAudioRoute(String audioRoute, Promise promise) {
@@ -1593,7 +1700,7 @@ public class InCallManagerModule extends ReactContextBaseJavaModule implements L
     }
 
 // ===== NOTE: below functions is based on appRTC DEMO M64 ===== //
-  /** Changes selection of the currently active audio device. */
+    /** Changes selection of the currently active audio device. */
     private void setAudioDeviceInternal(AudioDevice device) {
         Log.d(TAG, "setAudioDeviceInternal(device=" + device + ")");
         if (!audioDevices.contains(device)) {
@@ -1725,7 +1832,7 @@ public class InCallManagerModule extends ReactContextBaseJavaModule implements L
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
             return audioManager.isWiredHeadsetOn();
         } else {
-            final AudioDeviceInfo[] devices = audioManager.getDevices(AudioManager.GET_DEVICES_ALL);
+            final AudioDeviceInfo[] devices = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS);
             for (AudioDeviceInfo device : devices) {
                 final int type = device.getType();
                 if (type == AudioDeviceInfo.TYPE_WIRED_HEADSET) {
